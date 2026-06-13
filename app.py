@@ -16,7 +16,6 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     serial_numbers = []
-    sn_column_index = None
 
     # Hiển thị thông báo đang xử lý
     with st.spinner("Đang xử lý ngầm dữ liệu... Xin vui lòng đợi."):
@@ -28,32 +27,53 @@ if uploaded_file is not None:
                     if not table or len(table) < 2:
                         continue
 
-                    # Tìm cột SN
+                    # BỘ DÒ TÌM THÔNG MINH: Đọc dòng đầu tiên để quét tất cả các kiểu đặt tên tiêu đề cột trên đời
                     header = [
                         str(cell).strip().upper() if cell else ""
                         for cell in table[0]
                     ]
+                    sn_column_index = None
+
                     for index, col_name in enumerate(header):
-                        if col_name in [
-                            "SN",
-                            "S/N",
-                            "SERIAL NUMBER",
-                            "SERIAL NO",
-                            "SỐ SÊ-RI (SN)",
-                        ]:
+                        # Quét mọi từ khóa có thể xảy ra (thêm SERIAL, SỐ MÁY, SỐ SÊ RI, NO, CODE...)
+                        if any(
+                            keyword in col_name
+                            for keyword in [
+                                "SN",
+                                "S/N",
+                                "SERIAL",
+                                "SÊ RI",
+                                "SÊ-RI",
+                                "SERI",
+                                "SỐ MÁY",
+                                "SỐ BAO",
+                                "SER.NO",
+                                "SỐ CHẾ TẠO",
+                            ]
+                        ):
                             sn_column_index = index
                             break
 
-                    # Trích xuất dữ liệu ngầm
+                    # Trích xuất dữ liệu ngầm nếu tìm thấy bất kỳ cột nào khớp
                     if sn_column_index is not None:
                         for row in table[1:]:
                             if len(row) > sn_column_index:
                                 sn_value = row[sn_column_index]
                                 if sn_value:
-                                    serial_numbers.append(str(sn_value).strip())
+                                    # Loại bỏ tiêu đề bị lặp lại nếu có
+                                    sn_str = str(sn_value).strip()
+                                    if sn_str.upper() not in [
+                                        "SN",
+                                        "S/N",
+                                        "SERIAL",
+                                    ]:
+                                        serial_numbers.append(sn_str)
 
         # Nếu tìm thấy số seri, chuyển thẳng thành file Excel
         if serial_numbers:
+            # Loại bỏ các số seri bị trùng nhau để file Excel sạch đẹp nhất
+            serial_numbers = list(dict.fromkeys(serial_numbers))
+
             df = pd.DataFrame(serial_numbers, columns=["Serial Number (SN)"])
 
             buffer = io.BytesIO()
@@ -72,5 +92,5 @@ if uploaded_file is not None:
             )
         else:
             st.error(
-                "Không tìm thấy cột 'SN' hoặc dữ liệu số seri trong file PDF này."
+                "Hệ thống chưa nhận diện được cột Số Seri. Bạn hãy kiểm tra lại xem file PDF có đúng là dạng bảng văn bản không nhé."
             )
